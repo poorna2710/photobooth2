@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>photobooth!</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Caveat:wght@600&display=swap');
+
+  :root{
+    --paper:#f4efe4;
+    --ink:#2b2722;
+    --accent:#b9472f;
+    --tape:rgba(214,201,170,.6);
+    --shadow:rgba(40,34,28,.25);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'Courier Prime',monospace;
+    background:
+      radial-gradient(circle at 20% 10%, #efe7d6 0%, transparent 55%),
+      radial-gradient(circle at 85% 90%, #e8dec9 0%, transparent 55%),
+      #e4dac4;
+    color:var(--ink);
+    min-height:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:24px 16px 48px;
+    -webkit-font-smoothing:antialiased;
+  }
+  header{text-align:center;margin-bottom:18px}
+  h1{
+    font-family:'Caveat',cursive;
+    font-size:46px;
+    letter-spacing:1px;
+    line-height:1;
+    transform:rotate(-2deg);
+  }
+  .tag{font-size:12px;letter-spacing:3px;text-transform:uppercase;color:#7c7368;margin-top:6px}
+
+  .booth{
+    width:100%;
+    max-width:380px;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+
+  /* live + captured share the 2:3.5 frame */
+  .frame{
+    position:relative;
+    width:100%;
+    aspect-ratio:2 / 3.5;
+    background:#1c1814;
+    border-radius:6px;
+    overflow:hidden;
+    box-shadow:0 14px 30px var(--shadow);
+  }
+  video,#shot{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+    transform:scaleX(-1);
+  }
+  #shot{transform:none}
+  video.no-mirror{transform:none}
+
+  /* filter previews are applied via canvas at capture; live preview gets a CSS hint */
+  .flt-none{}
+  .flt-bw{filter:grayscale(1) contrast(1.1)}
+  .flt-sepia{filter:sepia(.55) contrast(1.05) brightness(1.02)}
+  .flt-retro{filter:sepia(.25) saturate(1.3) contrast(1.05) hue-rotate(-8deg)}
+  .flt-cool{filter:saturate(1.1) hue-rotate(8deg) brightness(1.03)}
+
+  .countdown{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Caveat',cursive;
+    font-size:140px;color:#fff;
+    text-shadow:0 4px 18px rgba(0,0,0,.5);
+    background:rgba(20,16,12,.18);
+    pointer-events:none;
+  }
+  .flash{
+    position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;
+  }
+  .flash.go{animation:flash .5s ease-out}
+  @keyframes flash{0%{opacity:.95}100%{opacity:0}}
+
+  .hint{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    text-align:center;color:#cfc4b2;font-size:13px;padding:24px;line-height:1.6;
+  }
+
+  /* captured print card */
+  .printcard{
+    background:#fffdf8;
+    padding:14px 14px 0;
+    border-radius:4px;
+    box-shadow:0 14px 30px var(--shadow);
+  }
+  .printcard .frame{box-shadow:none;border-radius:2px}
+  .caption-line{
+    font-family:'Caveat',cursive;
+    font-size:26px;text-align:center;
+    padding:10px 4px 16px;color:#3a342c;min-height:48px;
+  }
+
+  /* controls */
+  .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  button{
+    font-family:'Courier Prime',monospace;
+    font-weight:700;font-size:14px;
+    padding:13px 20px;border:none;border-radius:4px;cursor:pointer;
+    background:var(--ink);color:var(--paper);
+    transition:transform .08s ease, opacity .15s ease;
+    letter-spacing:.5px;
+  }
+  button:hover{transform:translateY(-1px)}
+  button:active{transform:translateY(0)}
+  button.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--ink)}
+  button.accent{background:var(--accent)}
+  button:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+  .filters{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .chip{
+    font-size:12px;padding:8px 14px;border-radius:20px;cursor:pointer;
+    border:1.5px solid #b3a890;background:transparent;color:#5f574b;letter-spacing:.5px;
+    transition:all .12s ease;
+  }
+  .chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+  .field{
+    font-family:'Courier Prime',monospace;font-size:14px;
+    padding:11px 14px;border:1.5px solid #b3a890;border-radius:4px;
+    background:#fffdf8;color:var(--ink);width:100%;text-align:center;
+  }
+  .field:focus{outline:none;border-color:var(--accent)}
+
+  .panel{display:flex;flex-direction:column;gap:12px}
+  .label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#7c7368;text-align:center}
+
+  footer{margin-top:28px;font-size:11px;color:#8a8175;text-align:center;line-height:1.7}
+  .err{color:var(--accent);font-size:13px;text-align:center;max-width:340px;line-height:1.6}
+  @media (prefers-reduced-motion:reduce){
+    .flash.go{animation:none}
+    h1{transform:none}
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>photobooth!</h1>
+    <div class="tag">single 2&times;3.5 &middot; print ready</div>
+  </header>
+
+  <div class="booth">
+    <!-- LIVE -->
+    <div id="liveStage">
+      <div class="frame">
+        <video id="video" class="flt-none" autoplay playsinline muted></video>
+        <div class="hint" id="hint">tap start camera to begin</div>
+        <div class="countdown" id="cd" style="display:none"></div>
+        <div class="flash" id="flash"></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
+        <div class="label">filter</div>
+        <div class="filters" id="filters">
+          <button class="chip on" data-f="none">none</button>
+          <button class="chip" data-f="bw">b&amp;w</button>
+          <button class="chip" data-f="sepia">sepia</button>
+          <button class="chip" data-f="retro">retro</button>
+          <button class="chip" data-f="cool">cool</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:6px">
+        <button id="startBtn" class="accent">start camera</button>
+        <button id="snapBtn" disabled>take photo</button>
+      </div>
+      <p class="err" id="err"></p>
+    </div>
+
+    <!-- RESULT -->
+    <div id="resultStage" style="display:none">
+      <div class="printcard">
+        <div class="frame">
+          <img id="shot" alt="your photo">
+        </div>
+        <div class="caption-line" id="capLine"></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
+        <div class="label">caption (optional)</div>
+        <input class="field" id="capInput" maxlength="28" placeholder="type a caption...">
+      </div>
+
+      <div class="row" style="margin-top:6px">
+        <button id="dlBtn" class="accent">download</button>
+        <button id="retakeBtn" class="ghost">retake</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    sized for 2&times;3.5 in &middot; 600&times;1050 px @ 300dpi<br>
+    works great with the nelko pp03
+  </footer>
+
+  <canvas id="canvas" style="display:none"></canvas>
+
+<script>
+const video=document.getElementById('video');
+const startBtn=document.getElementById('startBtn');
+const snapBtn=document.getElementById('snapBtn');
+const hint=document.getElementById('hint');
+const cd=document.getElementById('cd');
+const flash=document.getElementById('flash');
+const err=document.getElementById('err');
+const filters=document.getElementById('filters');
+const liveStage=document.getElementById('liveStage');
+const resultStage=document.getElementById('resultStage');
+const shot=document.getElementById('shot');
+const capInput=document.getElementById('capInput');
+const capLine=document.getElementById('capLine');
+const dlBtn=document.getElementById('dlBtn');
+const retakeBtn=document.getElementById('retakeBtn');
+const canvas=document.getElementById('canvas');
+
+let stream=null;
+let activeFilter='none';
+let lastDataUrl=null;
+
+// print spec: 2 x 3.5 in @ 300dpi
+const OUT_W=600, OUT_H=1050;
+const BORDER=40;           // white border around photo
+const CAPTION_H=120;       // reserved caption strip at bottom
+
+const filterMap={
+  none:'flt-none', bw:'flt-bw', sepia:'flt-sepia', retro:'flt-retro', cool:'flt-cool'
+};
+const canvasFilter={
+  none:'none',
+  bw:'grayscale(1) contrast(1.1)',
+  sepia:'sepia(0.55) contrast(1.05) brightness(1.02)',
+  retro:'sepia(0.25) saturate(1.3) contrast(1.05)',
+  cool:'saturate(1.1) brightness(1.03)'
+};
+
+filters.addEventListener('click',e=>{
+  const b=e.target.closest('.chip'); if(!b) return;
+  [...filters.children].forEach(c=>c.classList.remove('on'));
+  b.classList.add('on');
+  activeFilter=b.dataset.f;
+  video.className=filterMap[activeFilter];
+});
+
+startBtn.addEventListener('click',async()=>{
+  err.textContent='';
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'user', width:{ideal:1080}, height:{ideal:1920}},
+      audio:false
+    });
+    video.srcObject=stream;
+    hint.style.display='none';
+    snapBtn.disabled=false;
+    startBtn.textContent='camera on';
+    startBtn.disabled=true;
+  }catch(e){
+    err.textContent='could not open the camera. allow camera access in your browser, then tap start again. (camera also needs https or localhost.)';
+  }
+});
+
+snapBtn.addEventListener('click',()=>{
+  if(!stream) return;
+  snapBtn.disabled=true;
+  let n=3;
+  cd.style.display='flex';
+  cd.textContent=n;
+  const tick=setInterval(()=>{
+    n--;
+    if(n>0){ cd.textContent=n; }
+    else{
+      clearInterval(tick);
+      cd.style.display='none';
+      flash.classList.add('go');
+      setTimeout(()=>flash.classList.remove('go'),500);
+      capture();
+      snapBtn.disabled=false;
+    }
+  },1000);
+});
+
+function capture(){
+  canvas.width=OUT_W;
+  canvas.height=OUT_H;
+  const ctx=canvas.getContext('2d');
+
+  // paper
+  ctx.fillStyle='#fffdf8';
+  ctx.fillRect(0,0,OUT_W,OUT_H);
+
+  // photo area
+  const px=BORDER, py=BORDER;
+  const pw=OUT_W-BORDER*2;
+  const ph=OUT_H-BORDER*2-CAPTION_H;
+
+  // draw mirrored video, cover-cropped into photo area
+  const vw=video.videoWidth, vh=video.videoHeight;
+  const targetRatio=pw/ph, srcRatio=vw/vh;
+  let sx,sy,sw,sh;
+  if(srcRatio>targetRatio){
+    sh=vh; sw=vh*targetRatio; sx=(vw-sw)/2; sy=0;
+  }else{
+    sw=vw; sh=vw/targetRatio; sx=0; sy=(vh-sh)/2;
+  }
+
+  ctx.save();
+  ctx.filter=canvasFilter[activeFilter];
+  // mirror to match the live preview
+  ctx.translate(px+pw,py);
+  ctx.scale(-1,1);
+  ctx.drawImage(video, sx,sy,sw,sh, 0,0, pw,ph);
+  ctx.restore();
+
+  // subtle vintage vignette
+  const g=ctx.createRadialGradient(px+pw/2,py+ph/2,ph*0.35,px+pw/2,py+ph/2,ph*0.75);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(1,'rgba(30,22,14,0.18)');
+  ctx.fillStyle=g;
+  ctx.fillRect(px,py,pw,ph);
+
+  // thin inner frame line
+  ctx.strokeStyle='rgba(0,0,0,0.08)';
+  ctx.lineWidth=2;
+  ctx.strokeRect(px,py,pw,ph);
+
+  renderCaption(ctx);
+  lastDataUrl=canvas.toDataURL('image/png');
+  shot.src=lastDataUrl;
+
+  liveStage.style.display='none';
+  resultStage.style.display='block';
+}
+
+function renderCaption(ctx){
+  const text=(capInput.value||'').trim();
+  const cy=OUT_H-CAPTION_H/2+8;
+  // clear caption band first (so re-renders are clean)
+  ctx.fillStyle='#fffdf8';
+  ctx.fillRect(0,OUT_H-CAPTION_H,OUT_W,CAPTION_H);
+  if(text){
+    ctx.fillStyle='#3a342c';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.font='48px "Caveat", cursive';
+    ctx.fillText(text,OUT_W/2,cy);
+  }
+  capLine.textContent=text;
+}
+
+capInput.addEventListener('input',()=>{
+  if(!lastDataUrl) return;
+  const ctx=canvas.getContext('2d');
+  renderCaption(ctx);
+  lastDataUrl=canvas.toDataURL('image/png');
+  shot.src=lastDataUrl;
+});
+
+dlBtn.addEventListener('click',()=>{
+  if(!lastDataUrl) return;
+  const a=document.createElement('a');
+  a.href=lastDataUrl;
+  a.download='photobooth.png';
+  a.click();
+});
+
+retakeBtn.addEventListener('click',()=>{
+  resultStage.style.display='none';
+  liveStage.style.display='block';
+  capInput.value='';
+  lastDataUrl=null;
+});
+</script>
+</body>
+</html>
